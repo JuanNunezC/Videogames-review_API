@@ -46,7 +46,7 @@ def search_games(request):
             image_id = cover.get('image_id')
         # Build a medium/large cover size. Other sizes: t_thumb, t_cover_small, t_cover_big, t_720p, t_1080p
         if image_id:
-            cover_url = f"https://images.igdb.com/igdb/image/upload/t_thumb/{image_id}.jpg"
+            cover_url = f"https://images.igdb.com/igdb/image/upload/t_cover_big/{image_id}.jpg"
         results.append({
             'id': games.get('id'),
             'name': games.get('name'),
@@ -54,3 +54,32 @@ def search_games(request):
         })
 
     return JsonResponse(results, safe=False)
+
+def get_game_by_id(request, id):
+    access_token = get_igdb_access_token()
+    client_id = os.getenv('IGDB_CLIENT_ID')
+
+    url = 'https://api.igdb.com/v4/games'
+    headers = {
+        'Client-ID': client_id,
+        'Authorization': f'Bearer {access_token}',
+        'Accept': 'application/json',
+        'Content-Type': 'text/plain',
+    }
+    body = f'where id = {id}; fields id, name, cover.image_id; limit 1;'
+    response = requests.post(url, headers=headers, data=body)
+    if response.status_code != 200:
+        return JsonResponse({'error': 'IGDB API error', 'details': response.text}, status=response.status_code)
+    
+    raw = response.json()
+
+    game = raw[0]
+    image_id = game.get('cover', {}).get('image_id') if isinstance(game.get('cover'), dict) else None
+    cover_size = 't_cover_big'
+    cover_url = f"https://images.igdb.com/igdb/image/upload/{cover_size}/{image_id}.jpg" if image_id else None
+
+    return JsonResponse({
+        'id': game.get('id'),
+        'name': game.get('name'),
+        'cover_url': cover_url,
+    })
