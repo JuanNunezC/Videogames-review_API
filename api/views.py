@@ -1,8 +1,14 @@
-import requests
-from django.http import JsonResponse
 import random
-from igdb_token import get_igdb_access_token
+import requests
 import os
+import json
+from datetime import timedelta
+
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
+from firebase_admin import auth
+import firebase_config
+from igdb_token import get_igdb_access_token
 
 
 def random_number(request):
@@ -12,7 +18,6 @@ def random_number(request):
 def get_igdb_access_token_view(request):
     token = get_igdb_access_token()
     return JsonResponse({"access_token" : token})
-
     
 def search_games(request):
     query = request.GET.get('query', '')
@@ -82,4 +87,69 @@ def get_game_by_id(request, id):
         'id': game.get('id'),
         'name': game.get('name'),
         'cover_url': cover_url,
+    })
+
+# Auth Firebase
+
+@ensure_csrf_cookie
+def csrf_token(request):
+    return JsonResponse({"ok": True})
+
+@csrf_protect
+def create_session(request):
+    if request.method != "POST":
+        return JsonResponse({"error": "Method not allowed"}, status=405)
+    
+    try:
+        data = json.loads(request.body or "{}")
+        id_token = data.get("token")
+        if not id_token:
+            return JsonResponse({"error": "Missing token"}, status=400)
+
+        decoded_token = auth.verify_id_token(id_token)
+        expires_in = timedelta(days=5)
+        session_cookie = auth.create_session_cookie(id_token, expires_in=expires_in)
+
+        response = JsonResponse({"ok": True, "uid": decoded_token["uid"]})
+        response.set_cookie(
+            key="session",
+            value=session_cookie,
+            max_age=int(expires_in.total_seconds()),
+            httponly=True,
+            secure= False, # Set to True in production with HTTPS
+            samesite="Lax",
+            path="/"
+        )
+        return response
+    except Exception:
+        return JsonResponse({"error": "Invalid token"},status=401)
+
+@csrf_protect
+def logout(request):
+    if request.method != "POST":
+        return JsonResponse({"error": "Method not allowed"}, status=405)
+    response = JsonResponse({"ok": True})
+    response.delete_cookie("session",path="/")
+    return response
+
+def require_firebase_auth(view_func):
+    def _wrapped(request, *args, **kwargs):
+        cookie = request.COOKIES.get("session")
+        if not cookie:
+            return JsonResponse({"error": "Unauthorized"}, status=401)
+        try:
+            request.firebase_user = auth.verify_session_cookie(cookie,check_revoked=True)
+            return view_func(request, *args, **kwargs)
+        except Exception:
+            return JsonResponse({"error": "Unauthorized"}, status=401)
+    return _wrapped
+
+@require_firebase_auth
+def get_profile(request):
+    user = getattr(request, "firebase_user", {})
+    return JsonResponse({
+        "uid": user.get("uid"),
+        "email": user.get("email"),
+        "name": user.get("name"),
+        "picture": user.get("picture"),
     })
