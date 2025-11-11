@@ -18,9 +18,12 @@ def random_number(request):
 def get_igdb_access_token_view(request):
     token = get_igdb_access_token()
     return JsonResponse({"access_token" : token})
+
+def _igdb_escape(s: str) -> str:
+    return s.replace('"', r'\"')
     
 def search_games(request):
-    query = request.GET.get('query', '')
+    query = request.GET.get('query', '').strip()
     if not query:
         return JsonResponse({'error': 'No query provided'}, status=400)
 
@@ -34,21 +37,45 @@ def search_games(request):
         'Accept': 'application/json',
         'Content-Type': 'text/plain',
     }
-    body = f'search "{query}"; fields id, name, cover.image_id;'
 
+    safe_query = _igdb_escape(query)
+
+    body = f'''
+        search "{safe_query}";
+        fields id, name, cover.image_id, category, version_parent;
+        limit 50;
+    '''
+    
     response = requests.post(url, headers=headers, data=body)
     if response.status_code != 200:
         return JsonResponse({'error': 'IGDB API error', 'details': response.text}, status=response.status_code)
+    
+    raw = response.json() or []
 
-    raw = response.json()
-    # Build cover_url from image_id using IGDB image CDN. Fallback to None if missing
+    # Coincidencia exacta (si existe) -> devolver solo un juego
+    exact_matches = [game for game in raw if (game.get('name') 
+    or '').lower() == query.lower()]
+
+    if exact_matches:
+        # Prioriza juego principal (category 0 / sin version_parent)
+        main = [game for game in exact_matches if game.get('category') in (0, None) and not game.get('version_parent')] or exact_matches
+        game = sorted(main, key=lambda x: len(x.get('name') or ''))[0]
+        cover = game.get('cover')
+        image_id = cover.get('image_id') if isinstance(cover, dict) else None
+        cover_url = f"https://images.igdb.com/igdb/image/upload/t_cover_big/{image_id}.jpg" if image_id else None
+        
+        return JsonResponse([{
+            'id': game.get('id'),
+            'name': game.get('name'),
+            'cover_url': cover_url,
+        }], safe= False)
+    
+    # Sin nombre exacto: ordenar por menor longitud y luego alfabeticamente
     results = []
     for games in raw:
         cover_url = None
         cover = games.get('cover')
-        image_id = None
-        if isinstance(cover, dict):
-            image_id = cover.get('image_id')
+        image_id = cover.get('image_id') if isinstance(cover, dict) else None
         # Build a medium/large cover size. Other sizes: t_thumb, t_cover_small, t_cover_big, t_720p, t_1080p
         if image_id:
             cover_url = f"https://images.igdb.com/igdb/image/upload/t_cover_big/{image_id}.jpg"
@@ -57,7 +84,7 @@ def search_games(request):
             'name': games.get('name'),
             'cover_url': cover_url,
         })
-
+    results.sort(key=lambda x: (len(x['name']), x['name'].lower()))
     return JsonResponse(results, safe=False)
 
 def get_game_by_id(request, id):
@@ -129,7 +156,7 @@ def logout(request):
     if request.method != "POST":
         return JsonResponse({"error": "Method not allowed"}, status=405)
     response = JsonResponse({"ok": True})
-    response.delete_cookie("session",path="/")
+    response.delete_cookie("session")
     return response
 
 def require_firebase_auth(view_func):
@@ -144,12 +171,31 @@ def require_firebase_auth(view_func):
             return JsonResponse({"error": "Unauthorized"}, status=401)
     return _wrapped
 
-@require_firebase_auth
 def get_profile(request):
-    user = getattr(request, "firebase_user", {})
-    return JsonResponse({
-        "uid": user.get("uid"),
-        "email": user.get("email"),
-        "name": user.get("name"),
-        "picture": user.get("picture"),
+    cookie = request.COOKIES.get("session")
+    if not cookie:
+        response = JsonResponse({"authenticated": False}, status=200)
+        response["Cache-Control"] = "no-store"
+        return response
+
+    try:
+        user = auth.verify_session_cookie(cookie, check_revoked=True)
+    except Exception:
+        response = JsonResponse({"authenticated": False}, status=200)
+        response["Cache-Control"] = "no-store"
+        return response
+
+    uid = user.get("uid")
+    email = user.get("email")
+    name = user.get("name")
+    picture = user.get("picture")
+
+    response = JsonResponse({
+        "authenticated": True,
+        "uid": uid,
+        "email": email,
+        "name": name,
+        "picture": picture,
     })
+    response["Cache-Control"] = "no-store"
+    return response
