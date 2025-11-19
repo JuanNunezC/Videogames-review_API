@@ -20,8 +20,8 @@ from api import views
 
 
 urlpatterns = [
+    path('', admin.site.urls),  
     path('admin/', admin.site.urls),
     path('api/', include('api.urls')),
-    path('', views.random_number),  
  
 ]
