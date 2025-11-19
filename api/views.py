@@ -59,16 +59,19 @@ def search_games(request):
     if exact_matches:
         # Prioriza juego principal (category 0 / sin version_parent)
         main = [game for game in exact_matches if game.get('category') in (0, None) and not game.get('version_parent')] or exact_matches
-        game = sorted(main, key=lambda x: len(x.get('name') or ''))[0]
-        cover = game.get('cover')
-        image_id = cover.get('image_id') if isinstance(cover, dict) else None
-        cover_url = f"https://images.igdb.com/igdb/image/upload/t_cover_big/{image_id}.jpg" if image_id else None
-        
-        return JsonResponse([{
-            'id': game.get('id'),
-            'name': game.get('name'),
-            'cover_url': cover_url,
-        }], safe= False)
+        selected = sorted(main, key=lambda x: len(x.get('name') or ''))[:3]
+
+        results = []
+        for game in selected:
+            cover = game.get('cover')
+            image_id = cover.get('image_id') if isinstance(cover, dict) else None
+            cover_url = f"https://images.igdb.com/igdb/image/upload/t_cover_big/{image_id}.jpg" if image_id else None
+            results.append({
+                'id': game.get('id'),
+                'name': game.get('name'),
+                'cover_url': cover_url,
+            })
+        return JsonResponse(results, safe=False)
     
     # Sin nombre exacto: ordenar por menor longitud y luego alfabeticamente
     results = []
@@ -86,6 +89,7 @@ def search_games(request):
         })
     results.sort(key=lambda x: (len(x['name']), x['name'].lower()))
     return JsonResponse(results, safe=False)
+
 
 def get_game_by_id(request, id):
     access_token = get_igdb_access_token()
