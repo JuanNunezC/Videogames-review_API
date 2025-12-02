@@ -181,4 +181,3 @@ cython_debug/
 .cursorindexingignore
 
 videogames-review-firebase-adminsdk.json
-firebase_config.py
