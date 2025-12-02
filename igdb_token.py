@@ -11,6 +11,7 @@ CLIENT_SECRET = os.getenv('IGDB_SECRET_ID')
 def get_igdb_access_token():
     # Intentamos obtener el token de la caché(no funciona a la primera) ya que se hace el set despues
     token= cache.get('igdb_access_token')
+    #returns the token if exists
     if token:
         return token
 
@@ -23,6 +24,7 @@ def get_igdb_access_token():
         'grant_type': 'client_credentials'
     }
     response = requests.post(url, data=payload, timeout=5)
+    # Raise an exception for HTTP errors
     response.raise_for_status()
     data = response.json()
 

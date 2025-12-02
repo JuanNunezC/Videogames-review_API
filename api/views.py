@@ -147,8 +147,8 @@ def create_session(request):
             value=session_cookie,
             max_age=int(expires_in.total_seconds()),
             httponly=True,
-            secure= False, # Set to True in production with HTTPS
-            samesite="Lax",
+            secure= True, # Set to True in production with HTTPS
+            samesite="None",
             path="/"
         )
         return response
@@ -182,6 +182,7 @@ def get_profile(request):
         response["Cache-Control"] = "no-store"
         return response
 
+    # Verify session cookie using Firebase Admin SDK
     try:
         user = auth.verify_session_cookie(cookie, check_revoked=True)
     except Exception:
