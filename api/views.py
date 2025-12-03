@@ -6,6 +6,7 @@ from datetime import timedelta
 
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
+from django.views.decorators.http import require_GET, require_POST
 from firebase_admin import auth
 import firebase_config
 from igdb_token import get_igdb_access_token
@@ -123,10 +124,12 @@ def get_game_by_id(request, id):
 # Auth Firebase
 
 @ensure_csrf_cookie
+@require_GET
 def csrf_token(request):
     return JsonResponse({"ok": True})
 
 @csrf_protect
+@require_POST
 def create_session(request):
     if request.method != "POST":
         return JsonResponse({"error": "Method not allowed"}, status=405)
@@ -156,6 +159,7 @@ def create_session(request):
         return JsonResponse({"error": "Invalid token"},status=401)
 
 @csrf_protect
+@require_POST
 def logout(request):
     if request.method != "POST":
         return JsonResponse({"error": "Method not allowed"}, status=405)
