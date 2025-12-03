@@ -11,7 +11,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
-import os
+import os, json, logging
 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -85,6 +85,21 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'videogames_api.wsgi.application'
+
+# Initialize Firebase Admin once at startup
+try:
+    import firebase_admin
+    from firebase_admin import credentials
+
+    if not firebase_admin._apps:
+        service_json = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON")
+        if not service_json:
+            raise RuntimeError("FIREBASE_SERVICE_ACCOUNT_JSON not set")
+        cred = credentials.Certificate(json.loads(service_json))
+        firebase_admin.initialize_app(cred)
+except Exception as e:
+    logging.getLogger(__name__).error("Firebase Admin init failed: %r", e)
+
 
 
 # Database
