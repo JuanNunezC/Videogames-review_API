@@ -4,6 +4,8 @@ import os
 import json
 from datetime import timedelta
 
+from videogames_api import firebase_config
+
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
 from django.views.decorators.http import require_GET, require_POST
