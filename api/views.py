@@ -157,8 +157,10 @@ def create_session(request):
             path="/"
         )
         return response
-    except Exception:
-        return JsonResponse({"error": "Invalid token"},status=401)
+    except Exception as e:
+        print("create_session error:", repr(e))
+        return JsonResponse({"error": "Invalid token"}, status=401)
+
 
 @csrf_protect
 @require_POST
