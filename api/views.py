@@ -8,7 +8,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
 from django.views.decorators.http import require_GET, require_POST
 from firebase_admin import auth
-import firebase_config
+from django.middleware.csrf import get_token
 from igdb_token import get_igdb_access_token
 
 
@@ -126,7 +126,7 @@ def get_game_by_id(request, id):
 @ensure_csrf_cookie
 @require_GET
 def csrf_token(request):
-    return JsonResponse({"ok": True})
+    return JsonResponse({"ok": True, "csrfToken": get_token(request)})
 
 @csrf_protect
 @require_POST
@@ -141,10 +141,12 @@ def create_session(request):
             return JsonResponse({"error": "Missing token"}, status=400)
 
         decoded_token = auth.verify_id_token(id_token)
+        uid = decoded_token["uid"]  
+
         expires_in = timedelta(days=5)
         session_cookie = auth.create_session_cookie(id_token, expires_in=expires_in)
 
-        response = JsonResponse({"ok": True, "uid": decoded_token["uid"]})
+        response = JsonResponse({"ok": True, "uid": uid})
         response.set_cookie(
             key="session",
             value=session_cookie,
